@@ -1,5 +1,7 @@
 
 
+
+
 name: CI
 
 on:
@@ -9,23 +11,24 @@ on:
   pull_request:
     branches: [ "main" ]
 
-  
-  workflow_dispatch:
-
-
+ 
 jobs:
   
   build:
     
     runs-on: ubuntu-latest
 
-    
     steps:
       
       - uses: actions/checkout@v4
 
       
-      - name: Build imaga
-        run: echo Hello, world!
+      - name: Build image
+        run: docker build -t chopper717/my-portfolio.1 .
 
-      
+      - name: Push image 
+        run: |
+             docker login -u chopper717 -p ${{secrets.REGISTRY_PASS}}
+             docker push chopper717/my-portfolio.1 
+          
+          
