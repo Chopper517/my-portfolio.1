@@ -24,11 +24,11 @@ jobs:
 
       
       - name: Build image
-        run: docker build -t chopper717/my-portfolio.1 .
+        run: docker build -t ${{secrets.REGISTRY_USER}}/my-portfolio.1 .
 
       - name: Push image 
         run: |
-             docker login -u chopper717 -p ${{secrets.REGISTRY_PASS}}
-             docker push chopper717/my-portfolio.1 
+             docker login -u ${{secrets.REGISTRY_USER}} -p ${{secrets.REGISTRY_PASS}}
+             docker push ${{secrets.REGISTRY_USER}}/my-portfolio.1 
           
           
