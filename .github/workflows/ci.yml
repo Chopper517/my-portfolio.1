@@ -55,14 +55,19 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: SSH to server
+      - name: SSH Deploy
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.KEY }}
-          # port: ${{ secrets.PORT }}
-          script: |
-            docker rm -f resume
-            # Update this line with your ECR repository URL
-            docker run -d --name resume -p 8080:5001 ${{secrets.ECR_REGISTRY}}:${{github.run_number}}
+    host: ${{ secrets.SSH_HOST }}
+    username: ${{ secrets.SSH_USERNAME }}
+    key: ${{ secrets.SSH_PRIVATE_KEY }}
+    port: 22
+    script: |
+      # Authenticate Docker with ECR
+      aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+      
+      # Remove old container if it exists
+      docker rm -f resume || true
+      
+      # Run new container
+      docker run -d --name resume -p 8080:5001 ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:12
