@@ -65,4 +65,4 @@ jobs:
           script: |
             docker rm -f resume
             # Update this line with your ECR repository URL
-            docker run -d --name resume -p 8080:5001 YOUR_ECR_REPOSITORY_URL:${{github.run_number}}
+            docker run -d --name resume -p 8080:5001 ${{secrets.ECR_REGISTRY}}:${{github.run_number}}
