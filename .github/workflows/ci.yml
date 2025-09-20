@@ -52,25 +52,23 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           
   deploy:
-  needs: build
-  runs-on: ubuntu-latest
-  steps:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       - name: SSH to server and deploy
         uses: appleboy/ssh-action@v1
         with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.KEY }}
-        script: |
-          # 1. Authenticate Docker with ECR
-          # This command gets a temporary ECR login token and pipes it to docker login
-          # Note: The remote server must have the AWS CLI installed and configured
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ECR_REGISTRY_URI
-          
-          # 2. Stop and remove the old container
-          docker stop resume || true
-          docker rm -f resume || true
-          
-          # 3. Pull the new image and run it
-          docker pull YOUR_ECR_REGISTRY_URI/my-portfolio-repo:${{ github.run_number }}
-          docker run -d --name resume -p 8080:5001 YOUR_ECR_REGISTRY_URI/my-portfolio-repo:${{ github.run_number }}
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          script: |
+            # 1. Authenticate Docker with ECR on the remote server
+            # Note: The remote server must have the AWS CLI installed and configured
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ECR_REGISTRY_URI
+            
+            # 2. Stop and remove the old container gracefully
+            docker stop resume || true
+            docker rm -f resume || true
+            
+            # 3. Pull the new image and run it
+            docker run -d --name resume -p 8080:5001 YOUR_ECR_REGISTRY_URI/portfolio:${{ github.run_number }}
