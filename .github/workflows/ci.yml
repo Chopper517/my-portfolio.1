@@ -1,193 +1,68 @@
 name: CI
- 
+
 on:
-
   push:
-
     branches: [ "main" ]
-
   pull_request:
-
     branches: [ "main" ]
- 
+
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
-    env:
-
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-
-      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}          # e.g. 405894862034.dkr.ecr.us-east-1.amazonaws.com
-
-      ECR_REPOSITORY: portfoilo                          # intentional misspelling
-
-      VERSION_TAG: ${{ github.run_number }}
-
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
- 
-      - name: Configure AWS credentials
-
-        uses: aws-actions/configure-aws-credentials@v4
-
-        with:
-
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-          aws-region: ${{ secrets.AWS_REGION }}
- 
-      - name: Login to Amazon ECR
-
-        id: ecr
-
-        uses: aws-actions/amazon-ecr-login@v2
- 
-      - name: Ensure ECR repository exists
-
+      - name: Build and tag the Docker image
         run: |
+          # Use a temporary local tag for the scan
+          docker build -t my-portfolio-image:${{ github.run_number }} .
 
-          set -euo pipefail
-
-          if aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null 2>&1; then
-
-            echo "ECR repo $ECR_REPOSITORY already exists."
-
-          else
-
-            echo "ECR repo $ECR_REPOSITORY not found. Creating…"
-
-            aws ecr create-repository --repository-name "$ECR_REPOSITORY" --image-scanning-configuration scanOnPush=true --region "$AWS_REGION" >/dev/null
-
-            echo "Created $ECR_REPOSITORY"
-
-          fi
- 
-      - name: Build image (multi-tag once)
-
-        run: |
-
-          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
-
-          docker build -t "$IMAGE:${VERSION_TAG}" -t "$IMAGE:latest" .
- 
-      - name: Scan with Trivy
-
+      - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
-
         with:
-
-          image-ref: '${{ secrets.ECR_REGISTRY }}/portfoilo:${{ github.run_number }}'
-
-          exit-code: '1'
-
+          image-ref: 'my-portfolio-image:${{ github.run_number }}'
+          format: 'table'
+          exit-code: '1' # This will fail the job if vulnerabilities are found
+          ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
- 
-      - name: Push image tags
 
-        run: |
-
-          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
-
-          docker push "$IMAGE:${VERSION_TAG}"
-
-          docker push "$IMAGE:latest"
- 
-  deploy:
-
-    needs: build
-
-    runs-on: ubuntu-latest
-
-    env:
-
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-
-      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-
-      ECR_REPOSITORY: portfoilo
-
-      VERSION_TAG: ${{ github.run_number }}
-
-    steps:
-
-      - name: SSH to Server and deploy
-
-        uses: appleboy/ssh-action@v1
-
-        env:
-
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-
-          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-
-          ECR_REPOSITORY: portfoilo
-
-          VERSION_TAG: ${{ github.run_number }}
-
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Change to your AWS region
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and Push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: portfolio # Change to your ECR repository name
+        run: |
+          # Retag the local image with the ECR repository name
+          docker tag my-portfolio-image:${{ github.run_number }} $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.run_number }}
+          docker tag my-portfolio-image:${{ github.run_number }} $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          
+          # Push the tagged images to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.run_number }}
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to server
+        uses: appleboy/ssh-action@v1
+        with:
           host: ${{ secrets.HOST }}
-
           username: ${{ secrets.USERNAME }}
-
           key: ${{ secrets.KEY }}
-
-          # forward these env vars into the remote shell
-
-          envs: AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY,VERSION_TAG,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
-
+          # port: ${{ secrets.PORT }}
           script: |
-
-            set -euo pipefail
-
-            IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${VERSION_TAG}"
- 
-            # Install AWS CLI if missing
-
-            if ! command -v aws >/dev/null 2>&1; then
-
-              echo "Installing AWS CLI..."
-
-              sudo apt-get update -y
-
-              sudo apt-get install -y unzip curl
-
-              curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-
-              unzip -q awscliv2.zip
-
-              sudo ./aws/install
-
-              rm -rf aws awscliv2.zip
-
-            fi
- 
-            # Configure AWS creds (for ECR login) on the remote host
-
-            mkdir -p ~/.aws
-
-            cat > ~/.aws/credentials <<EOF
-
-            [default]
-
-            aws_access_key_id=${AWS_ACCESS_KEY_ID}
-
-            aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
-
-            EOF
-
-            cat > ~/.aws/config <<EOF
-
-            [default]
-
-            region=${AWS_REGION}
+            docker rm -f resume
+            # Update this line with your ECR repository URL
+            docker run -d --name resume -p 8080:5001 ${{secrets.ECR_REGISTRY}}:${{github.run_number}}
