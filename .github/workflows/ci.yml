@@ -71,4 +71,4 @@ jobs:
             docker rm -f resume || true
             
             # 3. Pull the new image and run it
-            docker run -d --name resume -p 8080:5001 YOUR_ECR_REGISTRY_URI/portfolio:${{ github.run_number }}
+            docker run -d --name resume -p 8080:5001 your_ecr_registry_uri/portfolio:${{ github.run_number }}
