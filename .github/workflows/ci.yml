@@ -64,11 +64,11 @@ jobs:
           script: |
             # 1. Authenticate Docker with ECR on the remote server
             # Note: The remote server must have the AWS CLI installed and configured
-            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ECR_REGISTRY_URI
-            
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+          
             # 2. Stop and remove the old container gracefully
             docker stop resume || true
             docker rm -f resume || true
-            
+          
             # 3. Pull the new image and run it
-            docker run -d --name resume -p 8080:5001 your_ecr_registry_uri/portfolio:${{ github.run_number }}
+            docker run -d --name resume -p 8080:5001 ${{ secrets.ECR_REGISTRY }}/portfolio:${{ github.run_number }}
