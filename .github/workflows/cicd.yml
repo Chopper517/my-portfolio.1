@@ -8,9 +8,7 @@ on:
 
 env:
     python_version: 3.11
-    AWS_REGION: AWS_REGION_HERE
-    AWS_ACCOUNT_ID: AWS_ACCOUNT_HERE
-    ECR_REPO: ECR_REPO_NAME_HERE
+          
 
 jobs:
     build:
@@ -24,29 +22,24 @@ jobs:
              run: pytest 
            - name: Build image 
              run: docker build -t Chopper517/portcicd .
-
-
            - name: Configure AWS credentials
              uses: aws-actions/configure-aws-credentials@v4
              with:
                   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: ${{ env.AWS_REGION }}
-
+                  aws-region: us-east-1   # <-- Change to your region
            - name: Login to Amazon ECR
+             id: login-ecr
              uses: aws-actions/amazon-ecr-login@v2
 
-           - name: Build Docker image
+           - name: Push Docker image to ECR
+             env:
+                ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                ECR_REPO: my-repo         # <-- Change to your ECR repo
+                IMAGE_TAG: portcicd          # Or use ${{ github.sha }}
              run: |
-                  docker build -t $ECR_REPO .
-                  docker tag $ECR_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+              docker tag my-image:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+               docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
 
-           - name: Push image to ECR
-             run: |
-                   docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
-           - name: Deploy to ECS
-             uses: aws-actions/amazon-ecs-update-service@v1
-             with:
-                 cluster: ECS_CLUSTER_NAME_HERE
-                 service: ECS_SERVICE_NAME_HERE
-                 force-new-deployment: true
+
+           
