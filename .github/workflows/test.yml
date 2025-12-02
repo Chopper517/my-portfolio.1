@@ -37,7 +37,7 @@ jobs:
     # Build image 
            - name: Build docker image 
              run: |
-                docker build -t Chopper517/portcicd$IMAGE_TAG .
+                docker build -t Chopper517/portcicd:$IMAGE_TAG .
 
     # configure AWS credentials 
          
