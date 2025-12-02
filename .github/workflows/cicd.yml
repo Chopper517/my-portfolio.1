@@ -11,18 +11,16 @@ env:
   ECR_REPOSITORY: utc-app
   ECS_CLUSTER: utc-cluster
   ECS_SERVICE: utc-service-service-7
-  IMAGE_NAME: Chopper517/portcicd
-  IMAGE_TAG: latest   # or ${{ github.sha }}
+  IMAGE_TAG: latest
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo
       - uses: actions/checkout@v4
 
-      # Python setup + testing
+      # Python setup + tests
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -31,12 +29,12 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pytest
-          pytest || true
+          pytest
 
-      # Build Docker image using YOUR name
+      # Build image WITHOUT putting image name into env
       - name: Build Docker image
         run: |
-          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          docker build -t Chopper517/portcicd:$IMAGE_TAG .
 
       # Configure AWS credentials
       - name: Configure AWS credentials
@@ -51,19 +49,19 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Tag + Push to ECR
+      # Push image to ECR
       - name: Push Docker image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker tag $IMAGE_NAME:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag Chopper517/portcicd:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # Deploy to ECS
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy@v1
-        with:
-          cluster: ${{ env.ECS_CLUSTER }}
-          service: ${{ env.ECS_SERVICE }}
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          wait-for-service-stability: true
+      # Force ECS to pull the new :latest image
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --force-new-deployment \
+            --region $AWS_REGION
