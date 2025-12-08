@@ -1,0 +1,49 @@
+name: build and push docker image 
+
+on:
+    push:
+        branches: ["main"]
+    pull_request:
+        branches: ["main"]
+
+permissions: 
+    id-token: write
+    contents: read
+
+
+env:
+    python_version: 3.11
+    AWS_REGION: us-east-1
+    IMAGE_NAME: portcicd
+    ACCOUNT_ID: ${{ secrets.ACCOUNT_ID}}
+    ECR_REPO: $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_NAME
+
+
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+           - uses: actions/checkout@v4
+
+           - uses: actions/setup-python@v5
+             with:
+              python-version: ${{ env.python_version }}
+
+           - name: Install dependencies and run test 
+             run: |
+               pip install -r requirements.txt
+               pip install pytest
+               pytest || true 
+
+           - name: Configure AWS credentials using OIDC
+             uses: aws-actions/configure-aws-credentials@v2
+             with:
+                role-to-assume: ${{ secrets.AWS_ROLE_ARN}}
+                aws-region: ${{ env.AWS_REGION }}
+           - name: Build Image 
+             run: docker build -t Chopper517/portcicd
+
+           - name: Check Credentials 
+             run: aws s3 ls 
+
