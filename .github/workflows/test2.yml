@@ -42,7 +42,7 @@ jobs:
                 role-to-assume: ${{ secrets.AWS_ROLE_ARN}}
                 aws-region: ${{ env.AWS_REGION }}
            - name: Build Image 
-             run: docker build -t Chopper517/portcicd
+             run: docker build -t Chopper517/portcicd .
 
            - name: Check Credentials 
              run: aws s3 ls 
